@@ -18,6 +18,19 @@ const USE_YAHOO_FINANCE = true; // Використовувати Yahoo Finance 
 // Список тикерів ETF, які нас цікавлять
 const TICKERS = ["MSTY", "TSLY", "NVDY", "CONY", "ULTY", "YMAX"];
 
+// Функція для визначення рекомендації на основі NAV та Yield
+const getRecommendation = (navChange, dividendYield) => {
+  if (navChange > -20 && dividendYield > 50) {
+    return "Hold";
+  } else if (navChange < -50 || dividendYield < 30) {
+    return "Replace";
+  } else if (navChange < -30) {
+    return "Reduce";
+  } else {
+    return "Hold";
+  }
+};
+
 export default function YieldMaxDashboard() {
   const [etfData, setEtfData] = useState([]); // Стейт для збереження даних про ETF
   const [error, setError] = useState(null); // Стейт для збереження помилок
@@ -92,11 +105,24 @@ export default function YieldMaxDashboard() {
 
             return {
               symbol: ticker,
+              name: meta.longName || meta.shortName || ticker,
               price: currentPrice,
               changesPercentage: changePercent,
               timestamp: meta.regularMarketTime,
               previousClose: previousClose,
               volume: quote.volume ? quote.volume[quote.volume.length - 1] : 0,
+              // Додаткові поля з API або розраховані значення
+              dividendYield: meta.trailingAnnualDividendYield
+                ? meta.trailingAnnualDividendYield * 100
+                : null,
+              monthlyPayout: meta.trailingAnnualDividendRate
+                ? meta.trailingAnnualDividendRate / 12
+                : null,
+              expenseRatio: 0.99, // Стандартний для YieldMax ETF
+              returnOfCapital: null, // Потрібен окремий API
+              navChange1Y: meta.fiftyTwoWeekChange
+                ? meta.fiftyTwoWeekChange * 100
+                : null,
             };
           }
           return null;
@@ -140,6 +166,7 @@ export default function YieldMaxDashboard() {
             const quote = data["Global Quote"];
             return {
               symbol: quote["01. symbol"],
+              name: quote["01. symbol"], // Alpha Vantage не надає назву
               price: parseFloat(quote["05. price"]),
               changesPercentage: parseFloat(
                 quote["10. change percent"].replace("%", "")
@@ -147,6 +174,12 @@ export default function YieldMaxDashboard() {
               timestamp: Math.floor(Date.now() / 1000),
               previousClose: parseFloat(quote["08. previous close"]),
               volume: parseInt(quote["06. volume"]),
+              // Alpha Vantage не надає додаткові дані про дивіденди
+              dividendYield: null,
+              monthlyPayout: null,
+              expenseRatio: 0.99, // Стандартний для YieldMax ETF
+              returnOfCapital: null,
+              navChange1Y: null,
             };
           }
           return null;
@@ -265,57 +298,133 @@ export default function YieldMaxDashboard() {
               <div className="mb-4 text-sm text-gray-600">
                 Останнє оновлення: {new Date().toLocaleString("uk-UA")}
               </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Тикер</TableHead>
-                    <TableHead>Ціна</TableHead>
-                    <TableHead>Зміна (%)</TableHead>
-                    <TableHead>Попередня ціна</TableHead>
-                    <TableHead>Об'єм</TableHead>
-                    <TableHead>Останнє оновлення</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {etfData.map((etf) => (
-                    <TableRow key={etf.symbol}>
-                      <TableCell className="font-medium">
-                        {etf.symbol}
-                      </TableCell>
-                      <TableCell>
-                        {typeof etf.price === "number"
-                          ? `$${etf.price.toFixed(2)}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell
-                        className={
-                          typeof etf.changesPercentage === "number" &&
-                          etf.changesPercentage < 0
-                            ? "text-red-600 font-medium"
-                            : "text-green-600 font-medium"
-                        }
-                      >
-                        {typeof etf.changesPercentage === "number"
-                          ? `${
-                              etf.changesPercentage > 0 ? "+" : ""
-                            }${etf.changesPercentage.toFixed(2)}%`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {typeof etf.previousClose === "number"
-                          ? `$${etf.previousClose.toFixed(2)}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {etf.volume ? etf.volume.toLocaleString() : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {formatDate(etf.timestamp)}
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Тикер</TableHead>
+                      <TableHead>Назва ETF</TableHead>
+                      <TableHead>Ціна</TableHead>
+                      <TableHead>Зміна (%)</TableHead>
+                      <TableHead>Попередня ціна</TableHead>
+                      <TableHead>Об'єм</TableHead>
+                      <TableHead>Дивідендний дохід (%)</TableHead>
+                      <TableHead>Місячний виплата ($)</TableHead>
+                      <TableHead>Комісія (%)</TableHead>
+                      <TableHead>Повернення капіталу (%)</TableHead>
+                      <TableHead>Зміна NAV 1р (%)</TableHead>
+                      <TableHead>Рекомендація</TableHead>
+                      <TableHead>Останнє оновлення</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {etfData.map((etf) => (
+                      <TableRow key={etf.symbol}>
+                        <TableCell className="font-medium">
+                          {etf.symbol}
+                        </TableCell>
+                        <TableCell
+                          className="text-sm text-gray-700 max-w-xs truncate"
+                          title={etf.name}
+                        >
+                          {etf.name || "—"}
+                        </TableCell>
+                        <TableCell>
+                          {typeof etf.price === "number"
+                            ? `$${etf.price.toFixed(2)}`
+                            : "—"}
+                        </TableCell>
+                        <TableCell
+                          className={
+                            typeof etf.changesPercentage === "number" &&
+                            etf.changesPercentage < 0
+                              ? "text-red-600 font-medium"
+                              : "text-green-600 font-medium"
+                          }
+                        >
+                          {typeof etf.changesPercentage === "number"
+                            ? `${
+                                etf.changesPercentage > 0 ? "+" : ""
+                              }${etf.changesPercentage.toFixed(2)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {typeof etf.previousClose === "number"
+                            ? `$${etf.previousClose.toFixed(2)}`
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {etf.volume ? etf.volume.toLocaleString() : "—"}
+                        </TableCell>
+                        <TableCell className="text-green-600 font-medium">
+                          {typeof etf.dividendYield === "number"
+                            ? `${etf.dividendYield.toFixed(1)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-green-600">
+                          {typeof etf.monthlyPayout === "number"
+                            ? `$${etf.monthlyPayout.toFixed(2)}`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-gray-600">
+                          {typeof etf.expenseRatio === "number"
+                            ? `${etf.expenseRatio}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-orange-600">
+                          {typeof etf.returnOfCapital === "number"
+                            ? `${etf.returnOfCapital.toFixed(1)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell
+                          className={
+                            typeof etf.navChange1Y === "number" &&
+                            etf.navChange1Y < 0
+                              ? "text-red-600 font-medium"
+                              : "text-green-600 font-medium"
+                          }
+                        >
+                          {typeof etf.navChange1Y === "number"
+                            ? `${
+                                etf.navChange1Y > 0 ? "+" : ""
+                              }${etf.navChange1Y.toFixed(1)}%`
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {typeof etf.navChange1Y === "number" &&
+                          typeof etf.dividendYield === "number" ? (
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                getRecommendation(
+                                  etf.navChange1Y,
+                                  etf.dividendYield
+                                ) === "Hold"
+                                  ? "bg-green-100 text-green-800"
+                                  : getRecommendation(
+                                      etf.navChange1Y,
+                                      etf.dividendYield
+                                    ) === "Reduce"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {getRecommendation(
+                                etf.navChange1Y,
+                                etf.dividendYield
+                              )}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {formatDate(etf.timestamp)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </>
           )}
         </CardContent>
