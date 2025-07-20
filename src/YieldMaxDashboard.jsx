@@ -295,9 +295,6 @@ export default function YieldMaxDashboard() {
             </div>
           ) : (
             <>
-              <div className="mb-4 text-sm text-gray-600">
-                Останнє оновлення: {new Date().toLocaleString("uk-UA")}
-              </div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -306,15 +303,12 @@ export default function YieldMaxDashboard() {
                       <TableHead>Назва ETF</TableHead>
                       <TableHead>Ціна</TableHead>
                       <TableHead>Зміна (%)</TableHead>
-                      <TableHead>Попередня ціна</TableHead>
-                      <TableHead>Об'єм</TableHead>
                       <TableHead>Дивідендний дохід (%)</TableHead>
                       <TableHead>Місячний виплата ($)</TableHead>
                       <TableHead>Комісія (%)</TableHead>
                       <TableHead>Повернення капіталу (%)</TableHead>
                       <TableHead>Зміна NAV 1р (%)</TableHead>
                       <TableHead>Рекомендація</TableHead>
-                      <TableHead>Останнє оновлення</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -348,14 +342,7 @@ export default function YieldMaxDashboard() {
                               }${etf.changesPercentage.toFixed(2)}%`
                             : "—"}
                         </TableCell>
-                        <TableCell>
-                          {typeof etf.previousClose === "number"
-                            ? `$${etf.previousClose.toFixed(2)}`
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {etf.volume ? etf.volume.toLocaleString() : "—"}
-                        </TableCell>
+
                         <TableCell className="text-green-600 font-medium">
                           {typeof etf.dividendYield === "number"
                             ? `${etf.dividendYield.toFixed(1)}%`
@@ -416,9 +403,6 @@ export default function YieldMaxDashboard() {
                           ) : (
                             "—"
                           )}
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {formatDate(etf.timestamp)}
                         </TableCell>
                       </TableRow>
                     ))}
